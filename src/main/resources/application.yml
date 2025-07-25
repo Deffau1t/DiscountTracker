@@ -1,0 +1,32 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/DiscountTracker
+    username: postgres
+    password: 1
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false
+  main:
+    allow-circular-references: true
+  task:
+    scheduling:
+      pool:
+        size: 10
+      enabled: true
+  security:
+    remember-me:
+      key: your-remember-me-key
+      token-validity-seconds: 2592000 # 30 days
+
+server:
+  port: 8080

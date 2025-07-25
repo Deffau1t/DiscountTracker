@@ -1,0 +1,43 @@
+-- PostgreSQL schema for price tracking system
+-- DB: price_tracker
+
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role VARCHAR(50) DEFAULT 'USER',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    url TEXT NOT NULL,
+    source VARCHAR(255), -- site domain (e.g., amazon.com)
+    category VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE price_history (
+    id SERIAL PRIMARY KEY,
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    price NUMERIC(10, 2) NOT NULL,
+    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    threshold NUMERIC(10, 2), -- notify if price drops below this
+    last_notified TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notified BOOLEAN
+);
+
+-- Indexes for faster lookups
+CREATE INDEX idx_price_history_product ON price_history(product_id);
+CREATE INDEX idx_notifications_user_product ON notifications(user_id, product_id);
+
+-- Sample roles: USER / ADMIN
+-- Future: add Telegram ID or device tokens for push notifications

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Создать уведомление - Discount Tracker</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .btn-outline-dark {
+            border-width: 2px;
+            transition: all 0.3s;
+        }
+        .btn-outline-dark:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .form-floating {
+            margin-bottom: 1rem;
+        }
+        .form-floating > label {
+            padding-left: 1rem;
+        }
+        .form-control:focus {
+            border-color: #212529;
+            box-shadow: 0 0 0 0.25rem rgba(33, 37, 41, 0.25);
+        }
+    </style>
+</head>
+<body class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Добавить новый товар</h2>
+        <a href="/home" class="btn btn-outline-dark">
+            <i class="fas fa-home"></i> На главную
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form th:action="@{/watch}" th:object="${productForm}" method="post">
+                <div class="form-floating">
+                    <input type="text" th:field="*{url}" class="form-control" id="url" 
+                           placeholder="https://example.com/product" required/>
+                    <label for="url">URL товара</label>
+                </div>
+
+                <div class="form-floating mb-3">
+                    <input type="text" th:field="*{name}" class="form-control" id="name" 
+                           placeholder="Название товара" required/>
+                    <label for="name">Название товара</label>
+                </div>
+
+                <div class="form-floating mb-3">
+                    <select class="form-select" th:field="*{category}" id="category" name="category" required>
+                        <option value="">Выберите категорию</option>
+                        <option value="video">Видеокарты</option>
+                        <option value="cpu">Процессоры</option>
+                        <option value="motherboard">Материнские платы</option>
+                        <option value="ram">Оперативная память</option>
+                        <option value="storage">Накопители</option>
+                    </select>
+                    <label for="category">Категория</label>
+                </div>
+
+                <div class="form-floating">
+                    <input type="text" th:field="*{source}" class="form-control" id="source" 
+                           placeholder="Ozon, Wildberries, Citilink" required/>
+                    <label for="source">Источник</label>
+                    <div class="form-text text-muted">
+                        К примеру, citilink
+                    </div>
+                </div>
+
+                <div class="form-floating">
+                    <input type="number" step="0.01" th:field="*{threshold}" class="form-control" 
+                           id="threshold" placeholder="1500.00" required/>
+                    <label for="threshold">Желаемая цена (₽)</label>
+                </div>
+
+                <div class="d-flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-outline-dark">
+                        <i class="fas fa-save"></i> Сохранить
+                    </button>
+                    <a href="/watch-list" class="btn btn-outline-dark">
+                        <i class="fas fa-times"></i> Отмена
+                    </a>
+                </div>
+
+                <div th:if="${error}" class="alert alert-danger mt-3">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span th:text="${error}"></span>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
+
