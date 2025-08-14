@@ -15,9 +15,11 @@ public class Notification {
     private Long id;
 
     @ManyToOne(optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
     @ManyToOne(optional = false)
+    @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
     private boolean notified = false;

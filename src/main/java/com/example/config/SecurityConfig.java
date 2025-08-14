@@ -36,11 +36,11 @@ public class SecurityConfig {
         http
             .userDetailsService(userDetailsService)
             .csrf(csrf -> csrf
-                .ignoringRequestMatchers("/api/**")
+                .ignoringRequestMatchers("/api/**", "/recommendations/api/**", "/h2-console/**")
                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/register", "/login", "/css/**").permitAll()
+                .requestMatchers("/register", "/login", "/css/**", "/h2-console/**").permitAll()
                 .anyRequest().authenticated()
             )
             .formLogin(form -> form
@@ -65,6 +65,9 @@ public class SecurityConfig {
                 .permitAll()
             );
 
+        // Отключаем frame options для H2 консоли
+        http.headers(headers -> headers.frameOptions().disable());
+        
         return http.build();
     }
 }

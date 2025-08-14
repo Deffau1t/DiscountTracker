@@ -2,7 +2,7 @@
 -- DB: price_tracker
 
 CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     role VARCHAR(50) DEFAULT 'USER',
@@ -10,7 +10,7 @@ CREATE TABLE users (
 );
 
 CREATE TABLE products (
-    id SERIAL PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     url TEXT NOT NULL,
     source VARCHAR(255), -- site domain (e.g., amazon.com)
@@ -19,16 +19,16 @@ CREATE TABLE products (
 );
 
 CREATE TABLE price_history (
-    id SERIAL PRIMARY KEY,
-    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    id BIGSERIAL PRIMARY KEY,
+    product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     price NUMERIC(10, 2) NOT NULL,
     checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE notifications (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     threshold NUMERIC(10, 2), -- notify if price drops below this
     last_notified TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -41,3 +41,74 @@ CREATE INDEX idx_notifications_user_product ON notifications(user_id, product_id
 
 -- Sample roles: USER / ADMIN
 -- Future: add Telegram ID or device tokens for push notifications
+
+-- ========================================
+-- NEW TABLES FOR RECOMMENDATION SYSTEM
+-- ========================================
+
+-- User preferences for categories
+CREATE TABLE user_preferences (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category VARCHAR(100) NOT NULL,
+    weight NUMERIC(3, 2) NOT NULL DEFAULT 0.5 CHECK (weight >= 0.0 AND weight <= 1.0),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, category)
+);
+
+-- User behavior tracking
+CREATE TABLE user_behaviors (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    behavior_type VARCHAR(50) NOT NULL, -- 'VIEW', 'WATCH_ADD', 'WATCH_REMOVE', 'NOTIFICATION_CLICK'
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Product recommendations
+CREATE TABLE product_recommendations (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    score NUMERIC(5, 4) NOT NULL DEFAULT 0.0 CHECK (score >= 0.0 AND score <= 1.0),
+    algorithm VARCHAR(50) NOT NULL, -- 'CONTENT_BASED', 'COLLABORATIVE', 'HYBRID'
+    is_viewed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, product_id)
+);
+
+-- Indexes for recommendation system
+CREATE INDEX idx_user_preferences_user ON user_preferences(user_id);
+CREATE INDEX idx_user_preferences_category ON user_preferences(category);
+CREATE INDEX idx_user_behaviors_user ON user_behaviors(user_id);
+CREATE INDEX idx_user_behaviors_product ON user_behaviors(product_id);
+CREATE INDEX idx_user_behaviors_type ON user_behaviors(behavior_type);
+CREATE INDEX idx_product_recommendations_user ON product_recommendations(user_id);
+CREATE INDEX idx_product_recommendations_score ON product_recommendations(score);
+CREATE INDEX idx_product_recommendations_algorithm ON product_recommendations(algorithm);
+
+-- ========================================
+-- MIGRATION: FIX COLUMN TYPES TO BIGINT
+-- Run these if your existing schema was created with INTEGER/SERIAL
+-- ========================================
+
+-- Primary keys
+-- ALTER TABLE users ALTER COLUMN id TYPE BIGINT;
+-- ALTER TABLE products ALTER COLUMN id TYPE BIGINT;
+-- ALTER TABLE price_history ALTER COLUMN id TYPE BIGINT;
+-- ALTER TABLE notifications ALTER COLUMN id TYPE BIGINT;
+
+-- Foreign keys to users/products
+-- ALTER TABLE price_history ALTER COLUMN product_id TYPE BIGINT;
+-- ALTER TABLE notifications ALTER COLUMN user_id TYPE BIGINT;
+-- ALTER TABLE notifications ALTER COLUMN product_id TYPE BIGINT;
+-- ALTER TABLE user_preferences ALTER COLUMN user_id TYPE BIGINT;
+-- ALTER TABLE user_behaviors ALTER COLUMN user_id TYPE BIGINT;
+-- ALTER TABLE user_behaviors ALTER COLUMN product_id TYPE BIGINT;
+-- ALTER TABLE product_recommendations ALTER COLUMN user_id TYPE BIGINT;
+-- ALTER TABLE product_recommendations ALTER COLUMN product_id TYPE BIGINT;
+
+-- Note: PostgreSQL allows INT -> BIGINT change in-place when constraints exist.
+-- If any ALTER fails due to constraints, drop the specific FK, alter the column, then recreate the FK.

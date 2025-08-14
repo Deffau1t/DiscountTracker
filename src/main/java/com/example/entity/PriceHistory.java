@@ -2,8 +2,6 @@ package com.example.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -11,8 +9,6 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "price_history")
 @Data
-@Getter
-@Setter
 public class PriceHistory {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

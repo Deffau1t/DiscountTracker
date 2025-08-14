@@ -19,4 +19,6 @@ public interface PriceHistoryRepository extends JpaRepository<PriceHistory, Long
     List<PriceHistory> findLatestPrices();
 
     List<PriceHistory> findByProductId(Long productId);
+    
+    List<PriceHistory> findByProductOrderByCheckedAtDesc(com.example.entity.Product product);
 }

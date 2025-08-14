@@ -23,6 +23,11 @@ public class HomeController {
     private final UserRepository userRepository;
     private final NotificationRepository notificationRepository;
 
+    @GetMapping("/")
+    public String rootPage(@AuthenticationPrincipal UserDetails userDetails, Model model) {
+        return homePage(userDetails, model);
+    }
+
     @GetMapping("/home")
     public String homePage(@AuthenticationPrincipal UserDetails userDetails, Model model) {
         if (userDetails == null || userDetails.getUsername() == null) {
@@ -42,6 +47,7 @@ public class HomeController {
         model.addAttribute("watchListUrl", "/watch-list");
         model.addAttribute("addWatchUrl", "/watch");
         model.addAttribute("logoutUrl", "/logout");
+        model.addAttribute("recommendationsUrl", "/recommendations");
 
         return "home";
     }
