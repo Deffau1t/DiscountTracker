@@ -7,6 +7,7 @@ import com.example.entity.User;
 import com.example.repository.NotificationRepository;
 import com.example.repository.PriceHistoryRepository;
 import com.example.repository.ProductRepository;
+import com.example.service.UserBehaviorTrackingService;
 import com.example.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -31,6 +32,7 @@ public class WatchListController {
     private final UserRepository userRepository;
     private final PriceHistoryRepository priceHistoryRepository;
     private final ProductRepository productRepository;
+    private final UserBehaviorTrackingService userBehaviorTrackingService;
 
     @GetMapping
     public String getWatchList(
@@ -119,6 +121,7 @@ public class WatchListController {
         if (notificationOpt.isPresent()) {
             Notification notification = notificationOpt.get();
             Product product = notification.getProduct();
+            User user = notification.getUser();
             
             // Удаляем уведомление
             notificationRepository.deleteById(id);
@@ -128,6 +131,11 @@ public class WatchListController {
             if (remainingNotifications.isEmpty() && product.getSource().equalsIgnoreCase("my")) {
                 // Если это последнее уведомление и источник "my", удаляем товар
                 productRepository.delete(product);
+            }
+
+            // Трекинг удаления из списка наблюдения
+            if (user != null) {
+                userBehaviorTrackingService.trackWatchRemove(user, product);
             }
         }
         return "redirect:/watch-list";

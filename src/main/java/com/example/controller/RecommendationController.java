@@ -3,7 +3,9 @@ package com.example.controller;
 import com.example.dto.RecommendationDto;
 import com.example.dto.UserPreferenceDto;
 import com.example.entity.User;
+import com.example.entity.Product;
 import com.example.repository.UserRepository;
+import com.example.repository.ProductRepository;
 import com.example.service.RecommendationService;
 import com.example.service.UserBehaviorTrackingService;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ public class RecommendationController {
     private final RecommendationService recommendationService;
     private final UserBehaviorTrackingService behaviorTrackingService;
     private final UserRepository userRepository;
+    private final ProductRepository productRepository;
 
     /**
      * Главная страница рекомендаций
@@ -228,5 +231,33 @@ public class RecommendationController {
         }
 
         return "preferences";
+    }
+
+    /**
+     * Фиксирует просмотр товара и редиректит на источник
+     */
+    @GetMapping("/view/{productId}")
+    public String viewProduct(@AuthenticationPrincipal UserDetails userDetails,
+                              @PathVariable Long productId) {
+        if (userDetails == null || userDetails.getUsername() == null) {
+            return "redirect:/login";
+        }
+
+        java.util.Optional<User> userOpt = userRepository.findByEmail(userDetails.getUsername());
+        if (userOpt.isEmpty()) {
+            return "redirect:/login";
+        }
+        User user = userOpt.get();
+
+        return productRepository.findById(productId)
+                .map(product -> {
+                    behaviorTrackingService.trackProductView(user, product);
+                    String url = product.getUrl();
+                    if (url == null || url.isBlank()) {
+                        return "redirect:/recommendations";
+                    }
+                    return "redirect:" + url;
+                })
+                .orElse("redirect:/recommendations");
     }
 }

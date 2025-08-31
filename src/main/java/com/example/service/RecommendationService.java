@@ -29,6 +29,7 @@ public class RecommendationService {
     private final NotificationRepository notificationRepository;
     private final TrendAnalysisService trendAnalysisService;
     private final PersonalizationService personalizationService;
+    private final UserBehaviorTrackingService userBehaviorTrackingService;
 
     @Value("${recommendation.min.weight:0.5}")
     private Double minWeight;
@@ -79,6 +80,9 @@ public class RecommendationService {
                 log.warn("Алгоритмы вернули пустой список. Используем фолбэк-рекомендации");
                 combined = generateFallbackRecommendations(user, limit);
             }
+
+            // Усиливаем фокус по доминирующим категориям пользователя
+            combined = applyCategoryFocus(user, combined, limit);
             
             // Сохраняем рекомендации
             List<ProductRecommendation> saved = saveRecommendations(user, combined);
@@ -104,8 +108,25 @@ public class RecommendationService {
             preferences = getDefaultPreferences(user);
         }
         
-        // Получаем все товары
-        List<Product> products = productRepository.findAll();
+        // Берём только товары с активностью (WATCH_ADD, VIEW, NOTIFICATION_CLICK) или из наблюдений
+        Set<Long> activeProductIds = userBehaviorRepository.findAll().stream()
+                .filter(b -> b.getBehaviorType() == UserBehavior.BehaviorType.WATCH_ADD
+                        || b.getBehaviorType() == UserBehavior.BehaviorType.VIEW
+                        || b.getBehaviorType() == UserBehavior.BehaviorType.NOTIFICATION_CLICK)
+                .map(b -> b.getProduct().getId())
+                .collect(Collectors.toSet());
+
+        if (activeProductIds.isEmpty()) {
+            // Фолбэк на уведомления (список наблюдения)
+            List<Notification> allNotifications = notificationRepository.findAll();
+            activeProductIds = allNotifications.stream()
+                    .map(n -> n.getProduct().getId())
+                    .collect(Collectors.toSet());
+        }
+
+        List<Product> products = activeProductIds.isEmpty()
+                ? Collections.emptyList()
+                : productRepository.findAllById(activeProductIds);
         List<ProductRecommendation> recommendations = new ArrayList<>();
         
         for (Product product : products) {
@@ -128,6 +149,63 @@ public class RecommendationService {
     }
 
     /**
+     * Возвращает топ доминирующих категорий пользователя (по поведению и наблюдениям)
+     */
+    private List<String> getUserDominantCategories(User user, int maxCategories) {
+        Map<String, Long> categoryCounts = new HashMap<>();
+
+        // По поведению
+        List<UserBehavior> behaviors = userBehaviorRepository.findByUserId(user.getId());
+        behaviors.stream()
+                .filter(b -> b.getBehaviorType() == UserBehavior.BehaviorType.WATCH_ADD
+                        || b.getBehaviorType() == UserBehavior.BehaviorType.VIEW
+                        || b.getBehaviorType() == UserBehavior.BehaviorType.NOTIFICATION_CLICK)
+                .map(b -> b.getProduct().getCategory())
+                .filter(Objects::nonNull)
+                .forEach(cat -> categoryCounts.merge(cat, 1L, Long::sum));
+
+        // Фолбэк: по уведомлениям (watch-list)
+        if (categoryCounts.isEmpty()) {
+            List<Notification> notifications = notificationRepository.findByUserId(user.getId());
+            notifications.stream()
+                    .map(n -> n.getProduct().getCategory())
+                    .filter(Objects::nonNull)
+                    .forEach(cat -> categoryCounts.merge(cat, 1L, Long::sum));
+        }
+
+        return categoryCounts.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(Math.max(1, maxCategories))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Усиливает фокус рекомендаций на доминирующих категориях пользователя
+     */
+    private List<ProductRecommendation> applyCategoryFocus(User user, List<ProductRecommendation> recs, int limit) {
+        if (recs.isEmpty()) return recs;
+        List<String> topCategories = getUserDominantCategories(user, 1);
+        if (topCategories.isEmpty()) {
+            return recs.stream()
+                    .sorted((r1, r2) -> r2.getScore().compareTo(r1.getScore()))
+                    .limit(limit)
+                    .collect(Collectors.toList());
+        }
+
+        String top = topCategories.get(0);
+        // Жёсткая фильтрация: оставляем только топ-категорию
+        return recs.stream()
+                .filter(r -> r.getProduct() != null
+                        && r.getProduct().getCategory() != null
+                        && r.getProduct().getCategory().equals(top))
+                .peek(r -> r.setScore(r.getScore().multiply(BigDecimal.valueOf(1.5))))
+                .sorted((r1, r2) -> r2.getScore().compareTo(r1.getScore()))
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Фолбэк-рекомендации на случай отсутствия данных/совпадений
      */
     private List<ProductRecommendation> generateFallbackRecommendations(User user, Integer limit) {
@@ -137,27 +215,37 @@ public class RecommendationService {
                           || b.getBehaviorType() == UserBehavior.BehaviorType.VIEW
                           || b.getBehaviorType() == UserBehavior.BehaviorType.NOTIFICATION_CLICK)
                 .collect(Collectors.groupingBy(UserBehavior::getProduct, Collectors.counting()));
-    
+
+        // Если активностей нет вообще, используем популярность по количеству наблюдений (notifications)
+        if (popularityMap.isEmpty()) {
+            List<Notification> notifications = notificationRepository.findAll();
+            if (notifications.isEmpty()) {
+                return Collections.emptyList();
+            }
+            popularityMap = notifications.stream()
+                    .collect(Collectors.groupingBy(Notification::getProduct, Collectors.counting()));
+        }
+
         if (popularityMap.isEmpty()) {
             return Collections.emptyList();
         }
-    
+
         // Сортируем по убыванию популярности
         List<Map.Entry<Product, Long>> sortedByPopularity = popularityMap.entrySet().stream()
                 .sorted(Map.Entry.<Product, Long>comparingByValue().reversed())
                 .limit(limit)
                 .collect(Collectors.toList());
-    
+
         // Максимальное значение популярности для нормализации score
         long maxPopularity = sortedByPopularity.get(0).getValue();
-    
+
         return sortedByPopularity.stream()
                 .map(entry -> {
                     ProductRecommendation rec = new ProductRecommendation();
                     rec.setUser(user);
                     rec.setProduct(entry.getKey());
                     // Score нормализуем от 0.5 до 1.0
-                    double score = 0.5 + (0.5 * entry.getValue() / maxPopularity);
+                    double score = 0.5 + (0.5 * entry.getValue() / (double) maxPopularity);
                     rec.setScore(BigDecimal.valueOf(score));
                     rec.setAlgorithm(ProductRecommendation.AlgorithmType.TREND_BASED);
                     return rec;
@@ -936,6 +1024,14 @@ public class RecommendationService {
                 recommendation.setIsViewed(true);
                 recommendation.setUpdatedAt(LocalDateTime.now());
                 productRecommendationRepository.save(recommendation);
+                // Трекинг просмотра товара
+                try {
+                    User user = recommendation.getUser();
+                    Product product = recommendation.getProduct();
+                    if (user != null && product != null) {
+                        userBehaviorTrackingService.trackProductView(user, product);
+                    }
+                } catch (Exception ignored) {}
                 log.info("Рекомендация {} отмечена как просмотренная", recommendationId);
             }
         } catch (Exception e) {

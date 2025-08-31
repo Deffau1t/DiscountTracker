@@ -7,6 +7,7 @@ import com.example.entity.User;
 import com.example.repository.NotificationRepository;
 import com.example.repository.ProductRepository;
 import com.example.repository.UserRepository;
+import com.example.service.UserBehaviorTrackingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -27,6 +28,7 @@ public class WatchController {
     private final ProductRepository productRepository;
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final UserBehaviorTrackingService userBehaviorTrackingService;
 
     @GetMapping("/watch")
     public String watchForm(Model model) {
@@ -71,6 +73,9 @@ public class WatchController {
             notification.setProduct(product);
             notification.setThreshold(productForm.getThreshold());
             notificationRepository.save(notification);
+
+            // Отслеживаем добавление в список наблюдения
+            userBehaviorTrackingService.trackWatchAdd(user, product);
 
             return "redirect:/home";
 
