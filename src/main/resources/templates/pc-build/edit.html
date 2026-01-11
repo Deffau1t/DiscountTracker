@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Редактирование сборки ПК - Discount Tracker</title>
+    <meta name="_csrf" th:content="${_csrf.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .btn-outline-dark {
+            border-width: 2px;
+            transition: all 0.3s;
+        }
+        .btn-outline-dark:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .component-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            transition: all 0.3s;
+            min-height: 120px;
+        }
+        .component-card:hover {
+            border-color: #000;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .component-card.selected {
+            border-color: #198754;
+            background-color: #f0f9f5;
+        }
+        .component-card.empty {
+            border-style: dashed;
+            border-color: #ccc;
+            background-color: #f9f9f9;
+        }
+        .component-icon {
+            font-size: 2rem;
+            color: #666;
+        }
+        .compatibility-good {
+            color: #198754;
+        }
+        .compatibility-warning {
+            color: #ffc107;
+        }
+        .compatibility-error {
+            color: #dc3545;
+        }
+        .recommendation-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #000;
+            color: #fff;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+        }
+        .component-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .price-display {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #198754;
+        }
+    </style>
+</head>
+<body class="container-fluid mt-4">
+    <!-- Навигация -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a href="/pc-build" class="btn btn-outline-dark me-2">
+                <i class="fas fa-arrow-left"></i> Назад к сборкам
+            </a>
+            <a href="/home" class="btn btn-outline-dark">
+                <i class="fas fa-home"></i> Главная
+            </a>
+        </div>
+        <div>
+            <h3 class="mb-0" th:text="${build.buildName}">Название сборки</h3>
+        </div>
+    </div>
+
+    <!-- Уведомления -->
+    <div th:if="${success}" class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="fas fa-check-circle"></i> <span th:text="${success}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <!-- Общая информация -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <i class="fas fa-info-circle"></i> Информация о сборке
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <strong>Статус:</strong>
+                            <span class="badge bg-dark ms-2" th:text="${build.buildStatus}"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Совместимость:</strong>
+                            <span th:if="${compatibilityResult.compatible}" class="badge bg-success ms-2">
+                                <i class="fas fa-check"></i> Все компоненты совместимы
+                            </span>
+                            <span th:unless="${compatibilityResult.compatible}" class="badge bg-danger ms-2">
+                                <i class="fas fa-times"></i> Есть проблемы совместимости
+                            </span>
+                        </div>
+                    </div>
+                    <div th:if="${!#lists.isEmpty(compatibilityResult.issues)}" class="alert alert-danger">
+                        <strong><i class="fas fa-exclamation-triangle"></i> Проблемы совместимости:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li th:each="issue : ${compatibilityResult.issues}" th:text="${issue}"></li>
+                        </ul>
+                    </div>
+                    <div th:if="${!#lists.isEmpty(compatibilityResult.warnings)}" class="alert alert-warning mt-2">
+                        <strong><i class="fas fa-exclamation-circle"></i> Предупреждения:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li th:each="warning : ${compatibilityResult.warnings}" th:text="${warning}"></li>
+                        </ul>
+                    </div>
+                    <div th:if="${!#lists.isEmpty(compatibilityResult.info)}" class="alert alert-info mt-2">
+                        <strong><i class="fas fa-info-circle"></i> Информация:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li th:each="info : ${compatibilityResult.info}" th:text="${info}"></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <i class="fas fa-calculator"></i> Стоимость сборки
+                </div>
+                <div class="card-body text-center">
+                    <div class="price-display" th:text="${#numbers.formatDecimal(build.totalPrice, 1, 2) + ' ₽'}">0 ₽</div>
+                    <button type="button" class="btn btn-outline-dark btn-sm mt-3" onclick="checkCompatibility()">
+                        <i class="fas fa-check-circle"></i> Проверить совместимость
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Компоненты сборки -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4 class="mb-3"><i class="fas fa-cogs"></i> Компоненты сборки</h4>
+            <div class="row">
+                <!-- CPU -->
+                <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                    <div class="card component-card" th:classappend="${build.cpu == null ? 'empty' : 'selected'}" id="cpu-card">
+                        <div class="card-body text-center">
+                            <div class="component-icon mb-2">
+                                <i class="fas fa-microchip"></i>
+                            </div>
+                            <h6 class="card-title">Процессор</h6>
+                            <div th:if="${build.cpu != null}">
+                                <small class="text-muted d-block" th:text="${build.cpu.name}">Название</small>
+                                <small class="text-muted d-block" th:if="${build.cpu.price}" 
+                                       th:text="${#numbers.formatDecimal(build.cpu.price, 1, 2) + ' ₽'}"></small>
+                            </div>
+                            <div th:unless="${build.cpu != null}">
+                                <small class="text-muted">Не выбран</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-dark mt-2" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#componentModal"
+                                    data-component-type="CPU"
+                                    data-component-id="cpu">
+                                <i class="fas fa-edit"></i> <span th:text="${build.cpu != null ? 'Изменить' : 'Выбрать'}"></span>
+                            </button>
+                            <button type="button" th:if="${build.cpu != null}" 
+                                    class="btn btn-sm btn-outline-danger mt-2"
+                                    onclick="removeComponent('CPU')">
+                                <i class="fas fa-times"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GPU -->
+                <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                    <div class="card component-card" th:classappend="${build.gpu == null ? 'empty' : 'selected'}" id="gpu-card">
+                        <div class="card-body text-center">
+                            <div class="component-icon mb-2">
+                                <i class="fas fa-video"></i>
+                            </div>
+                            <h6 class="card-title">Видеокарта</h6>
+                            <div th:if="${build.gpu != null}">
+                                <small class="text-muted d-block" th:text="${build.gpu.name}">Название</small>
+                                <small class="text-muted d-block" th:if="${build.gpu.price}" 
+                                       th:text="${#numbers.formatDecimal(build.gpu.price, 1, 2) + ' ₽'}"></small>
+                            </div>
+                            <div th:unless="${build.gpu != null}">
+                                <small class="text-muted">Не выбрана</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-dark mt-2" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#componentModal"
+                                    data-component-type="GPU"
+                                    data-component-id="gpu">
+                                <i class="fas fa-edit"></i> <span th:text="${build.gpu != null ? 'Изменить' : 'Выбрать'}"></span>
+                            </button>
+                            <button type="button" th:if="${build.gpu != null}" 
+                                    class="btn btn-sm btn-outline-danger mt-2"
+                                    onclick="removeComponent('GPU')">
+                                <i class="fas fa-times"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Motherboard -->
+                <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                    <div class="card component-card" th:classappend="${build.motherboard == null ? 'empty' : 'selected'}" id="motherboard-card">
+                        <div class="card-body text-center">
+                            <div class="component-icon mb-2">
+                                <i class="fas fa-server"></i>
+                            </div>
+                            <h6 class="card-title">Материнская плата</h6>
+                            <div th:if="${build.motherboard != null}">
+                                <small class="text-muted d-block" th:text="${build.motherboard.name}">Название</small>
+                                <small class="text-muted d-block" th:if="${build.motherboard.price}" 
+                                       th:text="${#numbers.formatDecimal(build.motherboard.price, 1, 2) + ' ₽'}"></small>
+                            </div>
+                            <div th:unless="${build.motherboard != null}">
+                                <small class="text-muted">Не выбрана</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-dark mt-2" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#componentModal"
+                                    data-component-type="MOTHERBOARD"
+                                    data-component-id="motherboard">
+                                <i class="fas fa-edit"></i> <span th:text="${build.motherboard != null ? 'Изменить' : 'Выбрать'}"></span>
+                            </button>
+                            <button type="button" th:if="${build.motherboard != null}" 
+                                    class="btn btn-sm btn-outline-danger mt-2"
+                                    onclick="removeComponent('MOTHERBOARD')">
+                                <i class="fas fa-times"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RAM -->
+                <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                    <div class="card component-card" th:classappend="${build.ram == null ? 'empty' : 'selected'}" id="ram-card">
+                        <div class="card-body text-center">
+                            <div class="component-icon mb-2">
+                                <i class="fas fa-memory"></i>
+                            </div>
+                            <h6 class="card-title">Оперативная память</h6>
+                            <div th:if="${build.ram != null}">
+                                <small class="text-muted d-block" th:text="${build.ram.name}">Название</small>
+                                <small class="text-muted d-block" th:if="${build.ram.price}" 
+                                       th:text="${#numbers.formatDecimal(build.ram.price, 1, 2) + ' ₽'}"></small>
+                            </div>
+                            <div th:unless="${build.ram != null}">
+                                <small class="text-muted">Не выбрана</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-dark mt-2" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#componentModal"
+                                    data-component-type="RAM"
+                                    data-component-id="ram">
+                                <i class="fas fa-edit"></i> <span th:text="${build.ram != null ? 'Изменить' : 'Выбрать'}"></span>
+                            </button>
+                            <button type="button" th:if="${build.ram != null}" 
+                                    class="btn btn-sm btn-outline-danger mt-2"
+                                    onclick="removeComponent('RAM')">
+                                <i class="fas fa-times"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Storage -->
+                <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                    <div class="card component-card" th:classappend="${build.storage == null ? 'empty' : 'selected'}" id="storage-card">
+                        <div class="card-body text-center">
+                            <div class="component-icon mb-2">
+                                <i class="fas fa-hdd"></i>
+                            </div>
+                            <h6 class="card-title">Накопитель</h6>
+                            <div th:if="${build.storage != null}">
+                                <small class="text-muted d-block" th:text="${build.storage.name}">Название</small>
+                                <small class="text-muted d-block" th:if="${build.storage.price}" 
+                                       th:text="${#numbers.formatDecimal(build.storage.price, 1, 2) + ' ₽'}"></small>
+                            </div>
+                            <div th:unless="${build.storage != null}">
+                                <small class="text-muted">Не выбран</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-dark mt-2" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#componentModal"
+                                    data-component-type="STORAGE"
+                                    data-component-id="storage">
+                                <i class="fas fa-edit"></i> <span th:text="${build.storage != null ? 'Изменить' : 'Выбрать'}"></span>
+                            </button>
+                            <button type="button" th:if="${build.storage != null}" 
+                                    class="btn btn-sm btn-outline-danger mt-2"
+                                    onclick="removeComponent('STORAGE')">
+                                <i class="fas fa-times"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PSU -->
+                <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                    <div class="card component-card" th:classappend="${build.psu == null ? 'empty' : 'selected'}" id="psu-card">
+                        <div class="card-body text-center">
+                            <div class="component-icon mb-2">
+                                <i class="fas fa-plug"></i>
+                            </div>
+                            <h6 class="card-title">Блок питания</h6>
+                            <div th:if="${build.psu != null}">
+                                <small class="text-muted d-block" th:text="${build.psu.name}">Название</small>
+                                <small class="text-muted d-block" th:if="${build.psu.price}" 
+                                       th:text="${#numbers.formatDecimal(build.psu.price, 1, 2) + ' ₽'}"></small>
+                            </div>
+                            <div th:unless="${build.psu != null}">
+                                <small class="text-muted">Не выбран</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-dark mt-2" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#componentModal"
+                                    data-component-type="PSU"
+                                    data-component-id="psu">
+                                <i class="fas fa-edit"></i> <span th:text="${build.psu != null ? 'Изменить' : 'Выбрать'}"></span>
+                            </button>
+                            <button type="button" th:if="${build.psu != null}" 
+                                    class="btn btn-sm btn-outline-danger mt-2"
+                                    onclick="removeComponent('PSU')">
+                                <i class="fas fa-times"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Case -->
+                <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                    <div class="card component-card" th:classappend="${build.pcCase == null ? 'empty' : 'selected'}" id="case-card">
+                        <div class="card-body text-center">
+                            <div class="component-icon mb-2">
+                                <i class="fas fa-box"></i>
+                            </div>
+                            <h6 class="card-title">Корпус</h6>
+                            <div th:if="${build.pcCase != null}">
+                                <small class="text-muted d-block" th:text="${build.pcCase.name}">Название</small>
+                                <small class="text-muted d-block" th:if="${build.pcCase.price}" 
+                                       th:text="${#numbers.formatDecimal(build.pcCase.price, 1, 2) + ' ₽'}"></small>
+                            </div>
+                            <div th:unless="${build.pcCase != null}">
+                                <small class="text-muted">Не выбран</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-dark mt-2" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#componentModal"
+                                    data-component-type="CASE"
+                                    data-component-id="case">
+                                <i class="fas fa-edit"></i> <span th:text="${build.pcCase != null ? 'Изменить' : 'Выбрать'}"></span>
+                            </button>
+                            <button type="button" th:if="${build.pcCase != null}" 
+                                    class="btn btn-sm btn-outline-danger mt-2"
+                                    onclick="removeComponent('CASE')">
+                                <i class="fas fa-times"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cooler -->
+                <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                    <div class="card component-card" th:classappend="${build.cooler == null ? 'empty' : 'selected'}" id="cooler-card">
+                        <div class="card-body text-center">
+                            <div class="component-icon mb-2">
+                                <i class="fas fa-fan"></i>
+                            </div>
+                            <h6 class="card-title">Кулер процессора</h6>
+                            <div th:if="${build.cooler != null}">
+                                <small class="text-muted d-block" th:text="${build.cooler.name}">Название</small>
+                                <small class="text-muted d-block" th:if="${build.cooler.price}" 
+                                       th:text="${#numbers.formatDecimal(build.cooler.price, 1, 2) + ' ₽'}"></small>
+                            </div>
+                            <div th:unless="${build.cooler != null}">
+                                <small class="text-muted">Не выбран</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-dark mt-2" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#componentModal"
+                                    data-component-type="COOLER"
+                                    data-component-id="cooler">
+                                <i class="fas fa-edit"></i> <span th:text="${build.cooler != null ? 'Изменить' : 'Выбрать'}"></span>
+                            </button>
+                            <button type="button" th:if="${build.cooler != null}" 
+                                    class="btn btn-sm btn-outline-danger mt-2"
+                                    onclick="removeComponent('COOLER')">
+                                <i class="fas fa-times"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Рекомендации -->
+    <div class="row mb-4" th:if="${!#maps.isEmpty(recommendations)}">
+        <div class="col-12">
+            <h4 class="mb-3"><i class="fas fa-heart"></i> Рекомендации комплектующих</h4>
+            <div class="accordion" id="recommendationsAccordion">
+                <div th:each="recEntry : ${recommendations}" class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                th:data-bs-target="'#collapse' + ${recEntry.key}" 
+                                th:text="${recEntry.key.displayName}">
+                            Категория
+                        </button>
+                    </h2>
+                    <div th:id="'collapse' + ${recEntry.key}" class="accordion-collapse collapse" 
+                         data-bs-parent="#recommendationsAccordion">
+                        <div class="accordion-body">
+                            <div class="row">
+                                <div th:each="component : ${recEntry.value}" class="col-md-4 mb-3">
+                                    <div class="card position-relative">
+                                        <span class="recommendation-badge">
+                                            <i class="fas fa-star"></i> Рекомендация
+                                        </span>
+                                        <div class="card-body">
+                                            <h6 class="card-title" th:text="${component.product.name}">Название</h6>
+                                            <p class="text-muted mb-1" th:if="${component.manufacturer}" 
+                                               th:text="${component.manufacturer + ' ' + component.model}"></p>
+                                            <p class="text-muted mb-2" th:if="${component.product.currentPrice}" 
+                                               th:text="${#numbers.formatDecimal(component.product.currentPrice, 1, 2) + ' ₽'}"></p>
+                                            <button type="button" class="btn btn-sm btn-outline-dark select-component-btn" 
+                                                    th:data-component-id="${component.id}"
+                                                    th:data-component-type="${recEntry.key.name()}">
+                                                <i class="fas fa-plus"></i> Выбрать
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно выбора компонента -->
+    <div class="modal fade" id="componentModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="componentModalTitle">Выбор компонента</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Рекомендуемые компоненты</label>
+                        <div id="recommendedComponents" class="component-list">
+                            <!-- Заполнится через JS -->
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Все доступные компоненты</label>
+                        <div id="allComponents" class="component-list">
+                            <!-- Заполнится через JS -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script th:inline="javascript">
+        // DEBUG: Попытка получить build ID
+        console.log('DEBUG: build object from Thymeleaf:', /*[[${build}]]*/ null);
+        console.log('DEBUG: build.id from Thymeleaf:', /*[[${build.id}]]*/ null);
+        const buildId = /*[[${build.id}]]*/ null;
+        let currentComponentType = null;
+
+        console.log('Build ID after assignment:', buildId);
+
+        // Инициализация модального окна Bootstrap 5
+        const componentModalElement = document.getElementById('componentModal');
+        let componentModal = null;
+        if (componentModalElement) {
+            componentModal = new bootstrap.Modal(componentModalElement);
+            
+            componentModalElement.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                if (button) {
+                    currentComponentType = button.getAttribute('data-component-type');
+                    const componentName = button.getAttribute('data-component-id');
+                    
+                    console.log('Modal opening for component type:', currentComponentType);
+                    console.log('Button attributes:', {
+                        'data-component-type': button.getAttribute('data-component-type'),
+                        'data-component-id': button.getAttribute('data-component-id')
+                    });
+                    
+                    const cardTitle = button.closest('.component-card')?.querySelector('.card-title');
+                    if (cardTitle) {
+                        document.getElementById('componentModalTitle').textContent = 
+                            'Выбор компонента: ' + cardTitle.textContent;
+                    }
+                    
+                    if (currentComponentType) {
+                        console.log('Loading components for type:', currentComponentType);
+                        loadComponents(currentComponentType);
+                    } else {
+                        console.error('Component type is not set in button!');
+                    }
+                }
+            });
+        }
+
+        // Обработчик для кнопок выбора компонента в рекомендациях
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.select-component-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const componentId = this.getAttribute('data-component-id');
+                    const componentType = this.getAttribute('data-component-type');
+                    if (componentId && componentType) {
+                        selectComponent(parseInt(componentId), componentType);
+                    }
+                });
+            });
+        });
+
+        // Загрузка компонентов
+        function loadComponents(type) {
+            console.log('Загрузка компонентов типа:', type);
+            console.log('Build ID:', buildId);
+            
+            if (!buildId) {
+                console.error('Build ID не установлен');
+                const allDiv = document.getElementById('allComponents');
+                if (allDiv) {
+                    allDiv.innerHTML = '<p class="text-danger">Ошибка: ID сборки не найден</p>';
+                }
+                return;
+            }
+            
+            if (!type) {
+                console.error('Тип компонента не указан');
+                const allDiv = document.getElementById('allComponents');
+                if (allDiv) {
+                    allDiv.innerHTML = '<p class="text-danger">Ошибка: тип компонента не указан</p>';
+                }
+                return;
+            }
+            
+            const url = `/pc-build/api/components/${type}`;
+            console.log('Fetching from URL:', url);
+            
+            fetch(url, {
+                method: 'GET',
+                credentials: 'same-origin'
+            })
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    console.log('Response headers:', response.headers);
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            console.error('Error response body:', text);
+                            throw new Error('HTTP error! status: ' + response.status + ', body: ' + text);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(components => {
+                    console.log('Получено компонентов:', components.length);
+                    console.log('Компоненты:', components);
+                    const recommendedDiv = document.getElementById('recommendedComponents');
+                    const allDiv = document.getElementById('allComponents');
+                    
+                    recommendedDiv.innerHTML = '';
+                    allDiv.innerHTML = '';
+                    
+                    if (components.length === 0) {
+                        allDiv.innerHTML = '<p class="text-muted">Компоненты не найдены. Добавьте товары в список наблюдения с соответствующими категориями.</p>';
+                        return;
+                    }
+                    
+                    components.forEach((component, index) => {
+                        console.log(`Creating card ${index + 1}/${components.length} for component:`, component);
+                        const card = createComponentCard(component);
+                        allDiv.appendChild(card);
+                    });
+                })
+                .catch(error => {
+                    console.error('Ошибка загрузки компонентов:', error);
+                    const allDiv = document.getElementById('allComponents');
+                    if (allDiv) {
+                        allDiv.innerHTML = '<p class="text-danger">Ошибка загрузки компонентов: ' + error.message + '</p>';
+                    }
+                });
+        }
+
+        // Создание карточки компонента
+        function createComponentCard(component) {
+            console.log('Creating card for component:', component);
+            console.log('Current component type:', currentComponentType);
+            
+            const card = document.createElement('div');
+            card.className = 'card mb-3';
+            
+            const price = component.price || 0;
+            const componentId = component.id;
+            // Используем currentComponentType как приоритетный, так как он точно установлен при открытии модального окна
+            const componentType = currentComponentType || component.componentType;
+            
+            console.log('Using component type:', componentType);
+            
+            if (!componentType) {
+                console.error('Component type is not set!', component);
+            }
+            
+            card.innerHTML = `
+                <div class="card-body">
+                    <h6 class="card-title">${component.name || 'Неизвестно'}</h6>
+                    <p class="text-muted mb-1">
+                        ${component.manufacturer || ''} ${component.model || ''}
+                    </p>
+                    <p class="text-muted mb-2">
+                        <strong>${price.toLocaleString('ru-RU', {minimumFractionDigits: 0, maximumFractionDigits: 0})} ₽</strong>
+                    </p>
+                    <button type="button" class="btn btn-sm btn-outline-dark select-component-from-modal-btn" 
+                            data-component-id="${componentId}"
+                            data-component-type="${componentType}">
+                        <i class="fas fa-plus"></i> Выбрать
+                    </button>
+                </div>
+            `;
+            
+            // Добавляем обработчик события после создания карточки
+            const selectBtn = card.querySelector('.select-component-from-modal-btn');
+            if (selectBtn) {
+                selectBtn.addEventListener('click', function() {
+                    const id = parseInt(this.getAttribute('data-component-id'));
+                    const type = this.getAttribute('data-component-type');
+                    console.log('Selecting component:', id, type);
+                    if (!type) {
+                        console.error('Component type is missing in button!');
+                        alert('Ошибка: тип компонента не указан');
+                        return;
+                    }
+                    selectComponent(id, type);
+                });
+            }
+            
+            return card;
+        }
+
+        // Получение CSRF токена
+        function getCsrfToken() {
+            const csrfToken = document.querySelector('meta[name="_csrf"]');
+            return csrfToken ? csrfToken.getAttribute('content') : '';
+        }
+
+        // Выбор компонента
+        function selectComponent(componentId, componentType) {
+            console.log('Выбор компонента:', componentId, componentType, 'для сборки:', buildId);
+            
+            if (!buildId) {
+                alert('Ошибка: ID сборки не найден');
+                return;
+            }
+            
+            if (!componentId || !componentType) {
+                alert('Ошибка: Не указан компонент или тип');
+                return;
+            }
+            
+            const formData = new URLSearchParams();
+            formData.append('componentId', componentId);
+            formData.append('componentType', componentType);
+            
+            const csrfToken = getCsrfToken();
+            const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.getAttribute('content') || 'X-CSRF-TOKEN';
+            
+            const headers = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            };
+            if (csrfToken) {
+                headers[csrfHeader] = csrfToken;
+            }
+            
+            fetch(`/pc-build/${buildId}/add-component`, {
+                method: 'POST',
+                headers: headers,
+                credentials: 'same-origin',
+                body: formData.toString()
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error('HTTP error! status: ' + response.status + ', body: ' + text);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.success) {
+                    // Закрываем модальное окно
+                    if (componentModal) {
+                        componentModal.hide();
+                    }
+                    // Перезагружаем страницу
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + (data.message || 'Неизвестная ошибка'));
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Произошла ошибка при добавлении компонента: ' + error.message);
+            });
+        }
+
+        // Удаление компонента
+        function removeComponent(componentType) {
+            console.log('Удаление компонента:', componentType, 'из сборки:', buildId);
+            
+            if (!buildId) {
+                alert('Ошибка: ID сборки не найден');
+                return;
+            }
+            
+            if (!confirm('Вы уверены, что хотите удалить этот компонент?')) {
+                return;
+            }
+            
+            const formData = new URLSearchParams();
+            formData.append('componentType', componentType);
+            
+            const csrfToken = getCsrfToken();
+            const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.getAttribute('content') || 'X-CSRF-TOKEN';
+            
+            const headers = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            };
+            if (csrfToken) {
+                headers[csrfHeader] = csrfToken;
+            }
+            
+            fetch(`/pc-build/${buildId}/remove-component`, {
+                method: 'POST',
+                headers: headers,
+                credentials: 'same-origin',
+                body: formData.toString()
+            })
+            .then(response => {
+                console.log('Remove response status:', response.status);
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error('HTTP error! status: ' + response.status + ', body: ' + text);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Remove response data:', data);
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + (data.message || 'Неизвестная ошибка'));
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Произошла ошибка при удалении компонента: ' + error.message);
+            });
+        }
+
+        // Проверка совместимости
+        function checkCompatibility() {
+            location.reload();
+        }
+    </script>
+</body>
+</html>
+

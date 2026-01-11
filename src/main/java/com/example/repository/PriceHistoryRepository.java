@@ -21,4 +21,7 @@ public interface PriceHistoryRepository extends JpaRepository<PriceHistory, Long
     List<PriceHistory> findByProductId(Long productId);
     
     List<PriceHistory> findByProductOrderByCheckedAtDesc(com.example.entity.Product product);
+    
+    @Query("SELECT ph.price FROM PriceHistory ph WHERE ph.product.id = :productId ORDER BY ph.checkedAt DESC")
+    java.util.List<java.math.BigDecimal> findLatestPriceByProductId(Long productId);
 }

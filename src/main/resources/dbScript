@@ -112,3 +112,108 @@ CREATE INDEX idx_product_recommendations_algorithm ON product_recommendations(al
 
 -- Note: PostgreSQL allows INT -> BIGINT change in-place when constraints exist.
 -- If any ALTER fails due to constraints, drop the specific FK, alter the column, then recreate the FK.
+
+-- ========================================
+-- TABLES FOR PC BUILD MODULE
+-- ========================================
+
+-- PC Components table (extends products with technical specifications)
+CREATE TABLE pc_components (
+    id BIGSERIAL PRIMARY KEY,
+    product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    component_type VARCHAR(50) NOT NULL, -- 'CPU', 'GPU', 'MOTHERBOARD', 'RAM', 'STORAGE', 'PSU', 'CASE', 'COOLER'
+    
+    -- General characteristics
+    manufacturer VARCHAR(255),
+    model VARCHAR(255),
+    
+    -- CPU characteristics
+    socket VARCHAR(50), -- 'LGA1700', 'AM4', 'AM5'
+    cores INTEGER,
+    threads INTEGER,
+    base_clock NUMERIC(5, 2), -- GHz
+    boost_clock NUMERIC(5, 2), -- GHz
+    tdp INTEGER, -- W
+    
+    -- GPU characteristics
+    vram INTEGER, -- GB
+    vram_type VARCHAR(50), -- 'GDDR6', 'GDDR6X'
+    memory_bandwidth INTEGER,
+    
+    -- Motherboard characteristics
+    form_factor VARCHAR(50), -- 'ATX', 'mATX', 'ITX'
+    chipset VARCHAR(100), -- 'B650', 'Z790'
+    memory_slots INTEGER,
+    max_memory INTEGER, -- GB
+    memory_type VARCHAR(50), -- 'DDR4', 'DDR5'
+    pcie_slots INTEGER,
+    
+    -- RAM characteristics
+    capacity INTEGER, -- GB
+    speed INTEGER, -- MHz
+    latency VARCHAR(50), -- 'CL16'
+    
+    -- Storage characteristics
+    capacity_gb INTEGER, -- GB
+    storage_type VARCHAR(50), -- 'SSD', 'HDD', 'NVMe'
+    read_speed INTEGER, -- MB/s
+    write_speed INTEGER, -- MB/s
+    interface_type VARCHAR(50), -- 'SATA', 'NVMe', 'PCIe'
+    
+    -- PSU characteristics
+    wattage INTEGER, -- W
+    efficiency_rating VARCHAR(50), -- '80+ Bronze', 'Gold', etc.
+    modular BOOLEAN,
+    
+    -- Case characteristics
+    case_form_factor VARCHAR(255), -- Supported form factors
+    max_gpu_length INTEGER, -- mm
+    max_cpu_cooler_height INTEGER, -- mm
+    fan_slots INTEGER,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(product_id)
+);
+
+-- PC Builds table
+CREATE TABLE pc_builds (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    build_name VARCHAR(255),
+    description TEXT,
+    
+    -- Components
+    cpu_id BIGINT REFERENCES pc_components(id) ON DELETE SET NULL,
+    gpu_id BIGINT REFERENCES pc_components(id) ON DELETE SET NULL,
+    motherboard_id BIGINT REFERENCES pc_components(id) ON DELETE SET NULL,
+    ram_id BIGINT REFERENCES pc_components(id) ON DELETE SET NULL,
+    storage_id BIGINT REFERENCES pc_components(id) ON DELETE SET NULL,
+    psu_id BIGINT REFERENCES pc_components(id) ON DELETE SET NULL,
+    case_id BIGINT REFERENCES pc_components(id) ON DELETE SET NULL,
+    cooler_id BIGINT REFERENCES pc_components(id) ON DELETE SET NULL,
+    
+    -- Status
+    build_status VARCHAR(50) DEFAULT 'DRAFT', -- 'DRAFT', 'COMPLETE', 'INCOMPATIBLE', 'OPTIMIZING'
+    compatibility_checked BOOLEAN DEFAULT FALSE,
+    compatibility_issues TEXT,
+    total_price NUMERIC(10, 2) DEFAULT 0.0,
+    is_public BOOLEAN DEFAULT FALSE,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for PC Build module
+CREATE INDEX idx_pc_components_type ON pc_components(component_type);
+CREATE INDEX idx_pc_components_product ON pc_components(product_id);
+CREATE INDEX idx_pc_components_socket ON pc_components(socket);
+CREATE INDEX idx_pc_components_memory_type ON pc_components(memory_type);
+CREATE INDEX idx_pc_components_form_factor ON pc_components(form_factor);
+
+CREATE INDEX idx_pc_builds_user ON pc_builds(user_id);
+CREATE INDEX idx_pc_builds_status ON pc_builds(build_status);
+CREATE INDEX idx_pc_builds_public ON pc_builds(is_public);
+CREATE INDEX idx_pc_builds_cpu ON pc_builds(cpu_id);
+CREATE INDEX idx_pc_builds_gpu ON pc_builds(gpu_id);
+CREATE INDEX idx_pc_builds_motherboard ON pc_builds(motherboard_id);

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Сборка ПК - Discount Tracker</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .btn-outline-dark {
+            border-width: 2px;
+            transition: all 0.3s;
+        }
+        .btn-outline-dark:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .build-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid #000;
+        }
+        .build-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .status-badge {
+            font-size: 0.85rem;
+            padding: 0.35rem 0.65rem;
+        }
+    </style>
+</head>
+<body class="container mt-5">
+    <!-- Навигация -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-desktop me-2"></i>Мои сборки ПК</h2>
+        <div>
+            <a href="/home" class="btn btn-outline-dark me-2">
+                <i class="fas fa-home"></i> На главную
+            </a>
+            <a href="/watch-list" class="btn btn-outline-dark me-2">
+                <i class="fas fa-bell"></i> Уведомления
+            </a>
+            <button class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#createBuildModal">
+                <i class="fas fa-plus"></i> Создать сборку
+            </button>
+            <button class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#generateBuildModal">
+                <i class="fas fa-magic"></i> Авто-сборка
+            </button>
+        </div>
+    </div>
+
+    <!-- Уведомления -->
+    <div th:if="${success}" class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="fas fa-check-circle"></i> <span th:text="${success}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    
+    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="fas fa-exclamation-circle"></i> <span th:text="${error}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <!-- Список сборок -->
+    <div th:if="${#lists.isEmpty(builds)}" class="text-center py-5">
+        <i class="fas fa-desktop fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">Сборок пока нет</h5>
+        <p class="text-muted">Создайте новую сборку или воспользуйтесь авто-сборкой на основе ваших предпочтений</p>
+    </div>
+
+    <div th:if="${!#lists.isEmpty(builds)}" class="row">
+        <div th:each="build : ${builds}" class="col-lg-6 col-md-12 mb-4">
+            <div class="card build-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="card-title mb-1" th:text="${build.buildName}">Название сборки</h5>
+                            <p class="text-muted mb-0" th:text="${#temporals.format(build.updatedAt, 'dd.MM.yyyy HH:mm')}">Дата обновления</p>
+                        </div>
+                        <span class="badge bg-dark status-badge" 
+                              th:text="${build.buildStatus?.displayName ?: 'Черновик'}">Статус</span>
+                    </div>
+                    
+                    <p class="text-muted mb-3" th:if="${build.description}" th:text="${build.description}">Описание</p>
+                    
+                    <div class="mb-3">
+                        <small class="text-muted d-block mb-1">
+                            <i class="fas fa-ruble-sign"></i> 
+                            Общая стоимость: <strong th:text="${#numbers.formatDecimal(build.totalPrice, 1, 2)}">0</strong> ₽
+                        </small>
+                        <small class="text-muted d-block" th:if="${build.compatibilityChecked}">
+                            <i class="fas fa-check-circle" 
+                               th:classappend="${build.buildStatus == 'COMPLETE' ? 'text-success' : 'text-warning'}"></i>
+                            Совместимость: <span th:text="${build.buildStatus == 'COMPLETE' ? 'Проверена ✓' : 'Есть проблемы'}"></span>
+                        </small>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <a th:href="@{/pc-build/{id}(id=${build.id})}" class="btn btn-outline-dark btn-sm flex-fill">
+                            <i class="fas fa-edit"></i> Редактировать
+                        </a>
+                        <form th:action="@{/pc-build/{id}/delete(id=${build.id})}" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-outline-danger btn-sm" 
+                                    onclick="return confirm('Вы уверены, что хотите удалить эту сборку?')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно создания сборки -->
+    <div class="modal fade" id="createBuildModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Создать новую сборку</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form th:action="@{/pc-build/create}" method="post">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="buildName" class="form-label">Название сборки</label>
+                            <input type="text" class="form-control" id="buildName" name="buildName" 
+                                   placeholder="Например: Игровой ПК" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-dark">Создать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно авто-сборки -->
+    <div class="modal fade" id="generateBuildModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Автоматическая сборка</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form th:action="@{/pc-build/generate}" method="post">
+                    <div class="modal-body">
+                        <p class="text-muted">Система сгенерирует сборку на основе ваших предпочтений, отслеживаемых товаров и рекомендаций.</p>
+                        <div class="mb-3">
+                            <label for="generatedBuildName" class="form-label">Название сборки</label>
+                            <input type="text" class="form-control" id="generatedBuildName" name="buildName" 
+                                   placeholder="Например: Рекомендуемая сборка" value="Авто-сборка">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-dark">
+                            <i class="fas fa-magic"></i> Сгенерировать
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
